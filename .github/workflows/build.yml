@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build
-        run: xcodebuild -scheme MusaicFM -configuration Release build SYMROOT="$PWD/build"
+        run: xcodebuild -scheme MusaicFM -configuration Release build SYMROOT="$PWD/build" CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
 
       - name: Package
         run: |
