@@ -1,0 +1,25 @@
+name: Build MusaicFM
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: xcodebuild -scheme MusaicFM -configuration Release build SYMROOT="$PWD/build"
+
+      - name: Package
+        run: |
+          cd build/Release
+          zip -r MusaicFM.saver.zip MusaicFM.saver
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MusaicFM.saver
+          path: build/Release/MusaicFM.saver.zip

@@ -22,6 +22,7 @@
 @property (nonatomic, readwrite, strong) NSArray* currentItems;
 @property (nonatomic, readwrite, strong) NSArray* totalItems;
 @property (nonatomic, readwrite, strong) NSTimer* timer;
+@property (nonatomic, readwrite, strong) NSTimer* refreshTimer;
 @property (nonatomic, readwrite, assign) NSInteger lastCellIndex;
 
 @property (nonatomic, readwrite, strong) Manager* manager;
@@ -44,6 +45,11 @@
 
 - (void)dealloc {
     [self.timer invalidate];
+    [self.refreshTimer invalidate];
+    [SDImageCache.sharedImageCache clearMemory];
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+    [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:self];
+    [NSDistributedNotificationCenter.defaultCenter removeObserver:self];
 }
 
 - (void)awakeFromNib
@@ -58,6 +64,11 @@
     self.animationTimeInterval = 60;
     self.manager = [Manager new];
 
+    SDImageCache *cache = SDImageCache.sharedImageCache;
+    cache.config.maxMemoryCost = 100 * 1024 * 1024;
+    cache.config.maxMemoryCount = 100;
+    cache.config.maxDiskAge = 60 * 60 * 24 * 7;
+
     [self configureCollectionView];
     [self prepareLayout];
     [self fetchData];
@@ -71,6 +82,12 @@
      addObserver: self
      selector:@selector (willStop:)
      name: @"com.apple.screensaver.willstop" object:nil];
+
+    self.refreshTimer = [NSTimer scheduledTimerWithTimeInterval:3 * 60 * 60
+                                                        target:self
+                                                      selector:@selector(fetchData)
+                                                      userInfo:nil
+                                                       repeats:YES];
 }
 
 - (void)configureCollectionView
@@ -228,6 +245,7 @@
 
 -(void)onSleepNote:(NSNotification*)inNotification
 {
+    [SDImageCache.sharedImageCache clearMemory];
     if(@available (macOS 14.0, *)) {
         exit (0);
     }
@@ -235,6 +253,7 @@
 
 - (void)willStop:(NSNotification*)inNotification
 {
+    [SDImageCache.sharedImageCache clearMemory];
     if(@available (macOS 14.0, *)) {
         exit (0);
     }
@@ -288,7 +307,17 @@
 
     };
 
-    [[SDWebImageManager sharedManager] loadImageWithURL:url options:0 progress:nil completed:completion];
+    CGFloat scale = NSScreen.mainScreen.backingScaleFactor ?: 2.0;
+    CGFloat tilePoints = CGRectGetHeight(self.bounds) / (CGFloat)[Preferences preferences].rows;
+    CGFloat tilePixels = tilePoints * scale;
+    CGSize thumbnailSize = CGSizeMake(tilePixels, tilePixels);
+    SDImageResizingTransformer *transformer = [SDImageResizingTransformer transformerWithSize:thumbnailSize scaleMode:SDImageScaleModeFill];
+
+    [[SDWebImageManager sharedManager] loadImageWithURL:url
+                                                options:SDWebImageScaleDownLargeImages
+                                                context:@{SDWebImageContextImageTransformer: transformer}
+                                               progress:nil
+                                              completed:completion];
 }
 
 - (NSInteger)numberOfSectionsInCollectionView:(NSCollectionView*)collectionView
